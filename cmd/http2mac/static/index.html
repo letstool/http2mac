@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" sizes="512x512" href="/favicon.png">
+<title>http2mac — MAC Address Lookup</title>
+<style>
+  :root{
+    --bg:#0a0e14;--surface:#0f1520;--border:#1e2d45;--border-hi:#2a4060;
+    --accent:#00e5a0;--accent2:#00b07a;--accent-dim:#003d28;
+    --text:#c8d8e8;--text-dim:#4a6480;--text-mid:#7a9ab8;
+    --ok:#00d48a;--ok-dim:#003d28;--warn:#ffb340;--warn-dim:#3d2a00;
+    --err:#ff4e6a;--err-dim:#3d0010;
+    --reg:#00e5a0;--reg-dim:#003d28;--noreg:#4a6480;--noreg-dim:#0a0e14;
+    --uni:#00c8ff;--uni-dim:#003a52;--multi:#ff9000;--multi-dim:#3d2400;
+    --grid-a:rgba(30,45,69,.30);--grid-b:rgba(30,45,69,.15);
+    --radial:rgba(0,229,160,.07);--panel-tint:rgba(0,229,160,.04);
+    --sel-bg:#0f1520;--raw-bg:#070b10;--ring:#00e5a0;
+    --mono:'Courier New','Lucida Console',monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  }
+  [data-theme="light"]{
+    --bg:#eef3f9;--surface:#fff;--border:#c8d8ec;--border-hi:#a0bcd8;
+    --accent:#007a50;--accent2:#005538;--accent-dim:#d0f0e4;
+    --text:#152030;--text-dim:#7898b8;--text-mid:#3a6080;
+    --ok:#006e48;--ok-dim:#d0f0e4;--warn:#8c5200;--warn-dim:#fff0d0;
+    --err:#b0002a;--err-dim:#fde8ef;
+    --reg:#007a50;--reg-dim:#d0f0e4;--noreg:#888898;--noreg-dim:#eef3f9;
+    --uni:#005278;--uni-dim:#d4eaf8;--multi:#8c4500;--multi-dim:#fff0d0;
+    --grid-a:rgba(150,190,225,.28);--grid-b:rgba(150,190,225,.14);
+    --radial:rgba(0,160,100,.06);--panel-tint:rgba(0,160,100,.04);
+    --sel-bg:#fff;--raw-bg:#f4f8fc;--ring:#005538;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  .skip-link{position:absolute;top:-100px;left:16px;z-index:9999;background:var(--accent);color:var(--bg);font-family:var(--mono);font-size:.85rem;font-weight:700;padding:10px 18px;border-radius:0 0 6px 6px;text-decoration:none;letter-spacing:.08em;transition:top .2s}
+  .skip-link:focus{top:0;outline:3px solid var(--ring);outline-offset:2px}
+  :focus-visible{outline:2px solid var(--ring);outline-offset:3px;border-radius:3px}
+  :focus:not(:focus-visible){outline:none}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 16px 60px;
+    background-image:radial-gradient(ellipse 80% 40% at 50% -10%,var(--radial) 0%,transparent 70%),repeating-linear-gradient(0deg,transparent,transparent 39px,var(--grid-a) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,var(--grid-b) 40px);
+    transition:background .3s,color .3s}
+  header{width:100%;max-width:960px;padding:32px 0 24px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--border);margin-bottom:32px;transition:border-color .3s}
+  .logo-mac{width:42px;height:42px;flex-shrink:0}
+  .logo-mac .node{fill:none;stroke:var(--accent);stroke-width:1.6;transition:stroke .3s}
+  .logo-mac .core{fill:var(--accent);opacity:.9;transition:fill .3s}
+  .logo-mac .link{stroke:var(--accent);stroke-width:1.2;opacity:.6;transition:stroke .3s}
+  .header-text h1{font-family:var(--mono);font-size:1.05rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);transition:color .3s}
+  .header-text p{font-size:.68rem;color:var(--text-dim);letter-spacing:.07em;text-transform:uppercase;margin-top:3px;transition:color .3s}
+  .header-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .theme-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;border:1px solid var(--border);background:transparent;border-radius:20px;padding:5px 11px 5px 8px;transition:border-color .2s,background .2s,color .2s;color:var(--text-dim)}
+  .theme-toggle:hover,.theme-toggle:focus-visible{border-color:var(--accent2);background:var(--accent-dim);color:var(--accent)}
+  .theme-icon{font-size:.85rem;line-height:1;transition:transform .4s}
+  .theme-toggle:hover .theme-icon{transform:rotate(20deg)}
+  .theme-track{width:28px;height:15px;background:var(--border);border-radius:8px;position:relative;flex-shrink:0;transition:background .3s}
+  .theme-thumb{position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:var(--text-dim);transition:transform .3s,background .3s}
+  [data-theme="light"] .theme-track{background:var(--accent2)}
+  [data-theme="light"] .theme-thumb{background:#fff;transform:translateX(13px)}
+  .theme-label{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+  .lang-wrap{position:relative;display:flex;align-items:center}
+  .lang-sel{appearance:none;-webkit-appearance:none;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;padding:5px 26px 5px 10px;cursor:pointer;outline:none;transition:border-color .2s,background .2s,color .2s}
+  .lang-sel:hover,.lang-sel:focus-visible{border-color:var(--accent2);background:var(--accent-dim);color:var(--accent);outline:2px solid var(--ring);outline-offset:2px}
+  .lang-sel option{background:var(--sel-bg);color:var(--text)}
+  .lang-arr{position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-dim);font-size:.55rem}
+  main{width:100%;max-width:960px}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:20px;transition:background .3s,border-color .3s}
+  .panel-head{padding:10px 18px;background:var(--panel-tint);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:.66rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);transition:background .3s,border-color .3s,color .3s}
+  .panel-head::before{content:'';display:inline-block;width:3px;height:12px;background:var(--accent);border-radius:2px;flex-shrink:0;transition:background .3s}
+  .panel-body{padding:20px 22px}
+  .form-group{display:flex;flex-direction:column;gap:6px}
+  label{font-family:var(--mono);font-size:.63rem;font-weight:500;letter-spacing:.13em;text-transform:uppercase;color:var(--text-dim);cursor:pointer}
+  input,textarea{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:.85rem;padding:9px 12px;outline:none;width:100%;transition:border-color .2s,box-shadow .2s,background .3s,color .3s;min-height:44px}
+  input:focus-visible,textarea:focus-visible{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(0,229,160,.18);outline:none}
+  input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--err);box-shadow:0 0 0 2px rgba(255,78,106,.2)}
+  input::placeholder,textarea::placeholder{color:var(--text-dim)}
+  textarea{resize:vertical;min-height:100px;line-height:1.6}
+  .mac-tabs{display:flex;border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:12px;width:fit-content;transition:border-color .3s}
+  .mac-tab{padding:7px 15px;font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border:none;background:transparent;color:var(--text-dim);transition:all .18s;user-select:none;min-height:44px}
+  .mac-tab[aria-selected="true"]{background:var(--accent-dim);color:var(--accent)}
+  .mac-tab:hover:not([aria-selected="true"]){background:var(--panel-tint);color:var(--text-mid)}
+  .mac-tab:focus-visible{outline:2px solid var(--ring);outline-offset:-2px;z-index:1}
+  .mac-pane{display:none}.mac-pane.active{display:block}
+  .mac-hint{margin-top:6px;font-family:var(--mono);font-size:.63rem;color:var(--text-dim)}
+  .submit-row{margin-top:22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .btn-submit{display:flex;align-items:center;gap:9px;background:var(--accent-dim);border:1px solid var(--accent2);color:var(--accent);font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;padding:10px 26px;border-radius:4px;cursor:pointer;position:relative;overflow:hidden;transition:background .2s,box-shadow .2s,border-color .3s,color .3s;min-height:44px}
+  .btn-submit::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,229,160,.12),transparent);transform:translateX(-100%);transition:transform .4s}
+  .btn-submit:hover::before{transform:translateX(100%)}
+  .btn-submit:hover{box-shadow:0 0 20px rgba(0,176,122,.25);filter:brightness(1.08)}
+  .btn-submit:active{transform:scale(.98)}.btn-submit:disabled{opacity:.4;cursor:not-allowed}
+  .btn-submit:focus-visible{outline:3px solid var(--ring);outline-offset:3px}
+  .spinner{display:none;width:16px;height:16px;border:2px solid rgba(0,229,160,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  .loading .spinner{display:block}.loading .send-icon{display:none}
+  .query-hint{font-family:var(--mono);font-size:.67rem;color:var(--text-dim)}
+  #results-panel{display:none}
+  .result-meta{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .badge{font-family:var(--mono);font-size:.63rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:3px}
+  .badge-reg{background:var(--reg-dim);color:var(--reg);border:1px solid var(--reg)}
+  .badge-noreg{background:var(--noreg-dim);color:var(--noreg);border:1px solid var(--noreg)}
+  .badge-error{background:var(--err-dim);color:var(--err);border:1px solid var(--err)}
+  .badge-valid{background:var(--ok-dim);color:var(--ok);border:1px solid var(--ok)}
+  .badge-invalid{background:var(--err-dim);color:var(--err);border:1px solid var(--err)}
+  .badge-uni{background:var(--uni-dim);color:var(--uni);border:1px solid var(--uni)}
+  .badge-multi{background:var(--multi-dim);color:var(--multi);border:1px solid var(--multi)}
+  .badge-uaa{background:var(--uni-dim);color:var(--uni);border:1px solid var(--uni)}
+  .badge-laa{background:var(--warn-dim);color:var(--warn);border:1px solid var(--warn)}
+  .result-query-str{font-family:var(--mono);font-size:.72rem;color:var(--text-mid)}
+  .result-time{margin-left:auto;font-family:var(--mono);font-size:.67rem;color:var(--text-dim)}
+  .btn-copy{display:inline-flex;align-items:center;gap:6px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:.63rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:4px 11px;cursor:pointer;white-space:nowrap;transition:border-color .2s,background .2s,color .2s;min-height:28px}
+  .btn-copy:hover{border-color:var(--accent2);background:var(--accent-dim);color:var(--accent)}
+  .btn-copy.copied{border-color:var(--ok);color:var(--ok);background:var(--ok-dim)}
+  .mac-table-wrap{overflow-x:auto}
+  .mac-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.8rem}
+  .mac-table thead tr{border-bottom:1px solid var(--border-hi)}
+  .mac-table th{text-align:left;padding:6px 12px 8px;font-size:.6rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);white-space:nowrap}
+  .mac-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;transition:background .15s}
+  .mac-table tr:last-child td{border-bottom:none}
+  .mac-table tr:hover td{background:var(--panel-tint)}
+  .mac-table tr.row-detail:hover td{background:var(--panel-tint)}
+  .row-detail td{padding:0 12px 8px;border-bottom:1px solid var(--border);background:inherit}
+  .row-detail:last-child td{border-bottom:none}
+  .detail-line{font-size:.68rem;color:var(--text-dim);font-family:var(--mono);display:flex;flex-wrap:wrap;gap:0 18px;padding-top:0}
+  .detail-seg{white-space:nowrap}.detail-lbl{color:var(--text-dim);margin-right:3px}.detail-val{color:var(--text-mid)}
+  .td-mac{font-weight:600;color:var(--accent);white-space:nowrap}
+  .td-mac.noreg{color:var(--noreg)}
+  .td-mac.invalid{color:var(--err)}
+  .cell-main{display:block}.cell-sub{display:block;margin-top:2px;font-size:.66rem;color:var(--text-dim)}
+  .cell-main.accent{color:var(--accent)}.cell-main.muted{color:var(--text-mid)}
+  .td-noreg-msg{color:var(--noreg);font-size:.75rem;opacity:.8}
+  .td-invalid-msg{color:var(--err);font-size:.75rem;opacity:.8}
+  .assign-pill{display:inline-block;padding:2px 8px;border-radius:3px;font-size:.65rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+  .assign-MA-L{background:rgba(0,229,160,.12);color:#00e5a0;border:1px solid rgba(0,229,160,.3)}
+  .assign-MA-M{background:rgba(0,200,255,.12);color:#00c8ff;border:1px solid rgba(0,200,255,.3)}
+  .assign-MA-S{background:rgba(180,120,255,.12);color:#b478ff;border:1px solid rgba(180,120,255,.3)}
+  .assign-CID{background:rgba(255,179,64,.12);color:#ffb340;border:1px solid rgba(255,179,64,.3)}
+  .assign-IAB{background:rgba(255,100,60,.12);color:#ff643c;border:1px solid rgba(255,100,60,.3)}
+  .virtual-chip{font-size:.65rem;padding:2px 7px;border-radius:2px;background:var(--panel-tint);border:1px solid var(--border);color:var(--text-mid);white-space:nowrap;display:inline-block}
+  .virtual-chip.is-virtual{border-color:rgba(255,179,64,.4);color:#ffb340}
+  .raw-block{background:var(--raw-bg);border:1px solid var(--border);border-radius:4px;padding:14px 16px;font-family:var(--mono);font-size:.78rem;color:var(--text-mid);white-space:pre-wrap;word-break:break-all;line-height:1.7}
+  .stats-bar{display:flex;gap:20px;padding:12px 22px;flex-wrap:wrap;border-top:1px solid var(--border);font-family:var(--mono);font-size:.68rem;color:var(--text-dim);background:var(--panel-tint)}
+  .stat-item{display:flex;align-items:center;gap:6px}
+  .stat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .stat-dot.registered{background:#00e5a0}.stat-dot.unicast{background:#00c8ff}
+  .stat-dot.multicast{background:#ff9000}.stat-dot.invalid{background:#ff4e6a}
+  .stat-dot.noreg{background:var(--noreg)}
+  .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+  footer{margin-top:48px;font-family:var(--mono);font-size:.6rem;color:var(--text-dim);letter-spacing:.08em;text-align:center;opacity:.45}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  @media(max-width:600px){.theme-label{display:none}}
+  [dir="rtl"] .header-right{margin-left:0;margin-right:auto}
+  [dir="rtl"] .lang-arr{right:auto;left:8px}
+  [dir="rtl"] .lang-sel{padding:5px 10px 5px 26px}
+  [dir="rtl"] .result-time{margin-left:0;margin-right:auto}
+  [dir="rtl"] .panel-head::before{margin-right:0;margin-left:10px}
+  [dir="rtl"] .mac-table th,[dir="rtl"] .mac-table td{text-align:right}
+  [dir="rtl"] .skip-link{left:auto;right:16px}
+  [dir="rtl"] .btn-submit::before{background:linear-gradient(270deg,transparent,rgba(0,229,160,.10),transparent)}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content" id="skip-link">Skip to main content</a>
+<header role="banner">
+  <svg class="logo-mac" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <line class="link" x1="21" y1="21" x2="7" y2="10"/>
+    <line class="link" x1="21" y1="21" x2="35" y2="10"/>
+    <line class="link" x1="21" y1="21" x2="35" y2="32"/>
+    <line class="link" x1="21" y1="21" x2="7" y2="32"/>
+    <circle class="node" cx="7"  cy="10" r="4"/>
+    <circle class="node" cx="35" cy="10" r="4"/>
+    <circle class="node" cx="35" cy="32" r="4"/>
+    <circle class="node" cx="7"  cy="32" r="4"/>
+    <circle class="core" cx="21" cy="21" r="5"/>
+  </svg>
+  <div class="header-text">
+    <h1>http2mac</h1>
+    <p id="hdr-subtitle">OUI / MAC Address Intelligence</p>
+  </div>
+  <div class="header-right">
+    <div class="lang-wrap">
+      <label for="lang-sel" class="visually-hidden" id="lang-sel-lbl">Language</label>
+      <select class="lang-sel" id="lang-sel" aria-labelledby="lang-sel-lbl" title="Language">
+        <option value="ar">AR</option>
+        <option value="bn">BN</option>
+        <option value="de">DE</option>
+        <option value="en">EN</option>
+        <option value="es">ES</option>
+        <option value="fr">FR</option>
+        <option value="hi">HI</option>
+        <option value="id">ID</option>
+        <option value="ja">JA</option>
+        <option value="ko">KO</option>
+        <option value="pt-BR">PT</option>
+        <option value="ru">RU</option>
+        <option value="ur">UR</option>
+        <option value="vi">VI</option>
+        <option value="zh-CN">ZH</option>
+      </select>
+      <span class="lang-arr" aria-hidden="true">▾</span>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" role="switch" aria-checked="false" aria-label="Toggle color theme">
+      <span class="theme-icon" id="theme-icon" aria-hidden="true">☀️</span>
+      <div class="theme-track" aria-hidden="true"><div class="theme-thumb"></div></div>
+      <span class="theme-label" id="theme-label"></span>
+    </button>
+  </div>
+</header>
+<main id="main-content" role="main">
+  <div id="sr-status" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;"></div>
+  <section class="panel" aria-labelledby="ph-params">
+    <div class="panel-head" id="ph-params" role="heading" aria-level="2"></div>
+    <div class="panel-body">
+      <form id="mac-form" novalidate>
+        <div class="form-group">
+          <label id="lbl-mac-mode"></label>
+          <div class="mac-tabs" role="tablist" aria-labelledby="lbl-mac-mode">
+            <button class="mac-tab" role="tab" id="tab-single" data-tab="single" aria-selected="true" aria-controls="pane-single" tabindex="0"></button>
+            <button class="mac-tab" role="tab" id="tab-multi"  data-tab="multi"  aria-selected="false" aria-controls="pane-multi" tabindex="-1"></button>
+          </div>
+          <div class="mac-pane active" id="pane-single" role="tabpanel" aria-labelledby="tab-single" tabindex="0">
+            <input type="text" id="mac-single" autocomplete="off" spellcheck="false" aria-labelledby="lbl-mac-mode" aria-describedby="mac-single-hint" aria-required="true" aria-invalid="false">
+            <div class="mac-hint" id="mac-single-hint"></div>
+          </div>
+          <div class="mac-pane" id="pane-multi" role="tabpanel" aria-labelledby="tab-multi" tabindex="0" hidden>
+            <textarea id="mac-multi" autocomplete="off" spellcheck="false" rows="5" aria-labelledby="lbl-mac-mode" aria-describedby="mac-multi-hint" aria-required="true" aria-invalid="false"></textarea>
+            <div class="mac-hint" id="mac-multi-hint"></div>
+          </div>
+        </div>
+        <div class="submit-row">
+          <button class="btn-submit" id="btn-query" type="submit">
+            <svg class="send-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+              <line x1="6" y1="6" x2="6.01" y2="6"/>
+              <line x1="6" y1="18" x2="6.01" y2="18"/>
+            </svg>
+            <div class="spinner" aria-hidden="true"></div>
+            <span id="btn-send-label"></span>
+          </button>
+          <span class="query-hint" id="query-hint" aria-live="assertive" role="status"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+  <section class="panel" id="results-panel" aria-labelledby="ph-results" aria-live="polite">
+    <div class="panel-head" id="ph-results" role="heading" aria-level="2"></div>
+    <div class="panel-body" id="results-body"></div>
+    <div class="stats-bar" id="stats-bar" style="display:none"></div>
+  </section>
+</main>
+<footer role="contentinfo">HTTP2MAC · OUI / MAC ADDRESS INTELLIGENCE · v1.0</footer>
+<script>
+// ══════════════════════════════════════════════════════════
+// I18N — 15 LANGUAGES
+// ══════════════════════════════════════════════════════════
+const LANGS={
+ar:{subtitle:'ذكاء عناوين MAC / OUI',themeLight:'فاتح',themeDark:'داكن',panelParams:'معاملات الاستعلام',labelMacMode:'عنوان (عناوين) MAC',tabSingle:'عنوان واحد',tabMulti:'عناوين متعددة',placeholderSingle:'مثال: 00:11:22:33:44:55',placeholderMulti:'مثال:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'عنوان واحد في كل سطر أو مفصولة بفاصلة/مسافة · جميع الصيغ مقبولة',btnSend:'بحث MAC',panelResults:'النتائج',colMAC:'عنوان MAC',colValid:'صالح',colType:'النوع',colRegistered:'مسجّل',colOrg:'المنظمة',colCountry:'الدولة',colAssignment:'التسجيل',colVirtual:'افتراضي',labelRegistered:'مسجّل',labelUnregistered:'غير مسجّل',labelValid:'صالح',labelInvalid:'غير صالح',labelUnicast:'وحيد البث',labelMulticast:'متعدد البث',colAdminType:'نوع الإدارة',labelUAA:'عالمي (UAA)',labelLAA:'محلي (LAA)',notRegMsg:'غير مسجّل في IEEE.',invalidMsg:'صيغة MAC غير صالحة.',errBadge:'خطأ',warnNoMac:'⚠ أدخل عنوان MAC',loadingLabel:'جارٍ البحث عن عناوين MAC…',replyCount:n=>`${n} نتيجة`,resultsReady:n=>`اكتمل البحث، ${n} نتيجة.`,btnCopy:'نسخ CSV',btnCopied:'✓ تم النسخ',statRegistered:'مسجّل',statUnregistered:'غير مسجّل',statUnicast:'وحيد البث',statMulticast:'متعدد البث',statInvalid:'غير صالح',dir:'rtl',skipLink:'انتقل إلى المحتوى الرئيسي'},
+bn:{subtitle:'OUI / MAC ঠিকানা ইন্টেলিজেন্স',themeLight:'হালকা',themeDark:'গাঢ়',panelParams:'কোয়েরি প্যারামিটার',labelMacMode:'MAC ঠিকানা',tabSingle:'একক',tabMulti:'একাধিক',placeholderSingle:'যেমন: 00:11:22:33:44:55',placeholderMulti:'যেমন:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'প্রতি লাইনে একটি MAC বা কমা/স্পেস দিয়ে আলাদা',btnSend:'MAC অনুসন্ধান',panelResults:'ফলাফল',colMAC:'MAC ঠিকানা',colValid:'বৈধ',colType:'ধরন',colRegistered:'নিবন্ধিত',colOrg:'সংস্থা',colCountry:'দেশ',colAssignment:'নিবন্ধন',colVirtual:'ভার্চুয়াল',labelRegistered:'নিবন্ধিত',labelUnregistered:'অনিবন্ধিত',labelValid:'বৈধ',labelInvalid:'অবৈধ',labelUnicast:'ইউনিকাস্ট',labelMulticast:'মাল্টিকাস্ট',colAdminType:'প্রশাসন ধরন',labelUAA:'UAA (বৈশ্বিক)',labelLAA:'LAA (স্থানীয়)',notRegMsg:'IEEE-তে নিবন্ধিত নয়।',invalidMsg:'অবৈধ MAC ফরম্যাট।',errBadge:'ত্রুটি',warnNoMac:'⚠ একটি MAC ঠিকানা লিখুন',loadingLabel:'MAC ঠিকানা অনুসন্ধান হচ্ছে…',replyCount:n=>`${n}টি ফলাফল`,resultsReady:n=>`সম্পন্ন, ${n}টি ফলাফল।`,btnCopy:'CSV কপি',btnCopied:'✓ কপি হয়েছে',statRegistered:'নিবন্ধিত',statUnregistered:'অনিবন্ধিত',statUnicast:'ইউনিকাস্ট',statMulticast:'মাল্টিকাস্ট',statInvalid:'অবৈধ',dir:'ltr',skipLink:'মূল বিষয়বস্তুতে যান'},
+de:{subtitle:'OUI / MAC-Adress-Intelligenz',themeLight:'Hell',themeDark:'Dunkel',panelParams:'Anfrageparameter',labelMacMode:'MAC-Adresse(n)',tabSingle:'Einzeln',tabMulti:'Mehrfach',placeholderSingle:'z.B.: 00:11:22:33:44:55',placeholderMulti:'z.B.:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'Eine MAC pro Zeile oder durch Komma/Leerzeichen getrennt',btnSend:'MAC prüfen',panelResults:'Ergebnisse',colMAC:'MAC-Adresse',colValid:'Gültig',colType:'Typ',colRegistered:'Registriert',colOrg:'Organisation',colCountry:'Land',colAssignment:'Zuweisung',colVirtual:'Virtuell',labelRegistered:'REGISTRIERT',labelUnregistered:'NICHT REG.',labelValid:'GÜLTIG',labelInvalid:'UNGÜLTIG',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Admin-Typ',labelUAA:'UAA (global)',labelLAA:'LAA (lokal)',notRegMsg:'Nicht im IEEE registriert.',invalidMsg:'Ungültiges MAC-Format.',errBadge:'FEHLER',warnNoMac:'⚠ MAC-Adresse eingeben',loadingLabel:'MAC-Adressen werden geprüft…',replyCount:n=>`${n} Ergebnis(se)`,resultsReady:n=>`Prüfung abgeschlossen, ${n} Ergebnis(se).`,btnCopy:'CSV kopieren',btnCopied:'✓ Kopiert',statRegistered:'Registriert',statUnregistered:'Nicht reg.',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Ungültig',dir:'ltr',skipLink:'Zum Hauptinhalt'},
+en:{subtitle:'OUI / MAC Address Intelligence',themeLight:'Light',themeDark:'Dark',panelParams:'Query Parameters',labelMacMode:'MAC Address(es)',tabSingle:'Single',tabMulti:'Multiple',placeholderSingle:'e.g.: 00:11:22:33:44:55',placeholderMulti:'e.g.:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'One MAC per line, or comma/space separated · All formats accepted',btnSend:'Lookup MAC',panelResults:'Results',colMAC:'MAC Address',colValid:'Valid',colType:'Type',colRegistered:'Registered',colOrg:'Organisation',colCountry:'Country',colAssignment:'Assignment',colVirtual:'Virtual',labelRegistered:'REGISTERED',labelUnregistered:'NOT REG.',labelValid:'VALID',labelInvalid:'INVALID',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Admin Type',labelUAA:'UAA (Global)',labelLAA:'LAA (Local)',notRegMsg:'Not registered in IEEE OUI database.',invalidMsg:'Invalid MAC address format.',errBadge:'ERROR',warnNoMac:'⚠ Enter a MAC address',loadingLabel:'Looking up MAC addresses…',replyCount:n=>`${n} result(s)`,resultsReady:n=>`Lookup complete, ${n} result(s).`,btnCopy:'Copy CSV',btnCopied:'✓ Copied',statRegistered:'Registered',statUnregistered:'Not Reg.',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Invalid',dir:'ltr',skipLink:'Skip to main content'},
+es:{subtitle:'Inteligencia OUI / Dirección MAC',themeLight:'Claro',themeDark:'Oscuro',panelParams:'Parámetros de Consulta',labelMacMode:'Dirección(es) MAC',tabSingle:'Individual',tabMulti:'Múltiple',placeholderSingle:'ej.: 00:11:22:33:44:55',placeholderMulti:'ej.:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'Una MAC por línea o separadas por coma/espacio · Todos los formatos aceptados',btnSend:'Consultar MAC',panelResults:'Resultados',colMAC:'Dirección MAC',colValid:'Válida',colType:'Tipo',colRegistered:'Registrada',colOrg:'Organización',colCountry:'País',colAssignment:'Asignación',colVirtual:'Virtual',labelRegistered:'REGISTRADA',labelUnregistered:'NO REG.',labelValid:'VÁLIDA',labelInvalid:'INVÁLIDA',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Tipo Admin',labelUAA:'UAA (Global)',labelLAA:'LAA (Local)',notRegMsg:'No registrada en IEEE OUI.',invalidMsg:'Formato de MAC inválido.',errBadge:'ERROR',warnNoMac:'⚠ Introduce una dirección MAC',loadingLabel:'Consultando direcciones MAC…',replyCount:n=>`${n} resultado(s)`,resultsReady:n=>`Consulta completada, ${n} resultado(s).`,btnCopy:'Copiar CSV',btnCopied:'✓ Copiado',statRegistered:'Registradas',statUnregistered:'No Reg.',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Inválidas',dir:'ltr',skipLink:'Saltar al contenido'},
+fr:{subtitle:'Intelligence OUI / Adresse MAC',themeLight:'Clair',themeDark:'Sombre',panelParams:'Paramètres de la requête',labelMacMode:'Adresse(s) MAC',tabSingle:'Unique',tabMulti:'Multiple',placeholderSingle:'ex: 00:11:22:33:44:55',placeholderMulti:'ex:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'Une MAC par ligne ou séparées par virgule/espace · Tous les formats acceptés',btnSend:'Rechercher MAC',panelResults:'Résultats',colMAC:'Adresse MAC',colValid:'Valide',colType:'Type',colRegistered:'Enregistrée',colOrg:'Organisation',colCountry:'Pays',colAssignment:'Attribution',colVirtual:'Virtuel',labelRegistered:'ENREGISTRÉE',labelUnregistered:'NON ENR.',labelValid:'VALIDE',labelInvalid:'INVALIDE',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Type Admin',labelUAA:'UAA (Global)',labelLAA:'LAA (Local)',notRegMsg:"Non enregistrée dans la base IEEE OUI.",invalidMsg:"Format d'adresse MAC invalide.",errBadge:'ERREUR',warnNoMac:'⚠ Entrez une adresse MAC',loadingLabel:'Recherche des adresses MAC…',replyCount:n=>`${n} résultat(s)`,resultsReady:n=>`Recherche terminée, ${n} résultat(s).`,btnCopy:'Copier CSV',btnCopied:'✓ Copié',statRegistered:'Enregistrées',statUnregistered:'Non Enr.',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Invalides',dir:'ltr',skipLink:'Aller au contenu principal'},
+hi:{subtitle:'OUI / MAC पते की जानकारी',themeLight:'हल्का',themeDark:'गहरा',panelParams:'क्वेरी पैरामीटर',labelMacMode:'MAC पता/पते',tabSingle:'एकल',tabMulti:'एकाधिक',placeholderSingle:'उदा: 00:11:22:33:44:55',placeholderMulti:'उदा:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'प्रति पंक्ति एक MAC या कॉमा/स्पेस से अलग करें',btnSend:'MAC खोजें',panelResults:'परिणाम',colMAC:'MAC पता',colValid:'मान्य',colType:'प्रकार',colRegistered:'पंजीकृत',colOrg:'संगठन',colCountry:'देश',colAssignment:'असाइनमेंट',colVirtual:'वर्चुअल',labelRegistered:'पंजीकृत',labelUnregistered:'अपंजीकृत',labelValid:'मान्य',labelInvalid:'अमान्य',labelUnicast:'यूनिकास्ट',labelMulticast:'मल्टीकास्ट',colAdminType:'प्रशासन प्रकार',labelUAA:'UAA (वैश्विक)',labelLAA:'LAA (स्थानीय)',notRegMsg:'IEEE OUI में पंजीकृत नहीं।',invalidMsg:'अमान्य MAC पता प्रारूप।',errBadge:'त्रुटि',warnNoMac:'⚠ MAC पता दर्ज करें',loadingLabel:'MAC पते खोजे जा रहे हैं…',replyCount:n=>`${n} परिणाम`,resultsReady:n=>`खोज पूर्ण, ${n} परिणाम।`,btnCopy:'CSV कॉपी',btnCopied:'✓ कॉपी हो गया',statRegistered:'पंजीकृत',statUnregistered:'अपंजीकृत',statUnicast:'यूनिकास्ट',statMulticast:'मल्टीकास्ट',statInvalid:'अमान्य',dir:'ltr',skipLink:'मुख्य सामग्री पर जाएं'},
+id:{subtitle:'Intelijen OUI / Alamat MAC',themeLight:'Terang',themeDark:'Gelap',panelParams:'Parameter Kueri',labelMacMode:'Alamat MAC',tabSingle:'Tunggal',tabMulti:'Beberapa',placeholderSingle:'mis.: 00:11:22:33:44:55',placeholderMulti:'mis.:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'Satu MAC per baris atau pisahkan dengan koma/spasi',btnSend:'Cari MAC',panelResults:'Hasil',colMAC:'Alamat MAC',colValid:'Valid',colType:'Tipe',colRegistered:'Terdaftar',colOrg:'Organisasi',colCountry:'Negara',colAssignment:'Penugasan',colVirtual:'Virtual',labelRegistered:'TERDAFTAR',labelUnregistered:'TDK TERDAFTAR',labelValid:'VALID',labelInvalid:'TIDAK VALID',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Tipe Admin',labelUAA:'UAA (Global)',labelLAA:'LAA (Lokal)',notRegMsg:'Tidak terdaftar di IEEE OUI.',invalidMsg:'Format alamat MAC tidak valid.',errBadge:'KESALAHAN',warnNoMac:'⚠ Masukkan alamat MAC',loadingLabel:'Mencari alamat MAC…',replyCount:n=>`${n} hasil`,resultsReady:n=>`Pencarian selesai, ${n} hasil.`,btnCopy:'Salin CSV',btnCopied:'✓ Disalin',statRegistered:'Terdaftar',statUnregistered:'Tdk Terdaftar',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Tidak Valid',dir:'ltr',skipLink:'Lewati ke konten utama'},
+ja:{subtitle:'OUI / MACアドレス インテリジェンス',themeLight:'ライト',themeDark:'ダーク',panelParams:'クエリパラメータ',labelMacMode:'MACアドレス',tabSingle:'単一',tabMulti:'複数',placeholderSingle:'例: 00:11:22:33:44:55',placeholderMulti:'例:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'1行に1つのMAC またはカンマ/スペース区切り',btnSend:'MAC を検索',panelResults:'結果',colMAC:'MACアドレス',colValid:'有効',colType:'タイプ',colRegistered:'登録済み',colOrg:'組織',colCountry:'国',colAssignment:'割り当て',colVirtual:'仮想',labelRegistered:'登録済み',labelUnregistered:'未登録',labelValid:'有効',labelInvalid:'無効',labelUnicast:'ユニキャスト',labelMulticast:'マルチキャスト',colAdminType:'管理タイプ',labelUAA:'UAA（グローバル）',labelLAA:'LAA（ローカル）',notRegMsg:'IEEE OUIデータベースに登録されていません。',invalidMsg:'無効なMACアドレス形式です。',errBadge:'エラー',warnNoMac:'⚠ MACアドレスを入力してください',loadingLabel:'MACアドレスを検索中…',replyCount:n=>`${n} 件の結果`,resultsReady:n=>`検索完了、${n} 件の結果。`,btnCopy:'CSV コピー',btnCopied:'✓ コピー済み',statRegistered:'登録済み',statUnregistered:'未登録',statUnicast:'ユニキャスト',statMulticast:'マルチキャスト',statInvalid:'無効',dir:'ltr',skipLink:'メインコンテンツへ'},
+ko:{subtitle:'OUI / MAC 주소 인텔리전스',themeLight:'라이트',themeDark:'다크',panelParams:'쿼리 매개변수',labelMacMode:'MAC 주소',tabSingle:'단일',tabMulti:'다중',placeholderSingle:'예: 00:11:22:33:44:55',placeholderMulti:'예:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'줄당 MAC 하나 또는 쉼표/공백으로 구분',btnSend:'MAC 조회',panelResults:'결과',colMAC:'MAC 주소',colValid:'유효',colType:'유형',colRegistered:'등록됨',colOrg:'조직',colCountry:'국가',colAssignment:'할당',colVirtual:'가상',labelRegistered:'등록됨',labelUnregistered:'미등록',labelValid:'유효',labelInvalid:'무효',labelUnicast:'유니캐스트',labelMulticast:'멀티캐스트',colAdminType:'관리 유형',labelUAA:'UAA (글로벌)',labelLAA:'LAA (로컬)',notRegMsg:'IEEE OUI 데이터베이스에 등록되지 않음.',invalidMsg:'유효하지 않은 MAC 주소 형식.',errBadge:'오류',warnNoMac:'⚠ MAC 주소를 입력하세요',loadingLabel:'MAC 주소 조회 중…',replyCount:n=>`${n}개 결과`,resultsReady:n=>`조회 완료, ${n}개 결과.`,btnCopy:'CSV 복사',btnCopied:'✓ 복사됨',statRegistered:'등록됨',statUnregistered:'미등록',statUnicast:'유니캐스트',statMulticast:'멀티캐스트',statInvalid:'무효',dir:'ltr',skipLink:'본문으로 건너뛰기'},
+'pt-BR':{subtitle:'Inteligência OUI / Endereço MAC',themeLight:'Claro',themeDark:'Escuro',panelParams:'Parâmetros da Consulta',labelMacMode:'Endereço(s) MAC',tabSingle:'Único',tabMulti:'Múltiplo',placeholderSingle:'ex.: 00:11:22:33:44:55',placeholderMulti:'ex.:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'Um MAC por linha ou separados por vírgula/espaço',btnSend:'Consultar MAC',panelResults:'Resultados',colMAC:'Endereço MAC',colValid:'Válido',colType:'Tipo',colRegistered:'Registrado',colOrg:'Organização',colCountry:'País',colAssignment:'Atribuição',colVirtual:'Virtual',labelRegistered:'REGISTRADO',labelUnregistered:'NÃO REG.',labelValid:'VÁLIDO',labelInvalid:'INVÁLIDO',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Tipo Admin',labelUAA:'UAA (Global)',labelLAA:'LAA (Local)',notRegMsg:'Não registrado no banco IEEE OUI.',invalidMsg:'Formato de endereço MAC inválido.',errBadge:'ERRO',warnNoMac:'⚠ Informe um endereço MAC',loadingLabel:'Consultando endereços MAC…',replyCount:n=>`${n} resultado(s)`,resultsReady:n=>`Consulta concluída, ${n} resultado(s).`,btnCopy:'Copiar CSV',btnCopied:'✓ Copiado',statRegistered:'Registrados',statUnregistered:'Não Reg.',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Inválidos',dir:'ltr',skipLink:'Pular para o conteúdo'},
+ru:{subtitle:'Интеллект OUI / MAC-адресов',themeLight:'Светлая',themeDark:'Тёмная',panelParams:'Параметры запроса',labelMacMode:'MAC-адрес(а)',tabSingle:'Одиночный',tabMulti:'Множественный',placeholderSingle:'напр.: 00:11:22:33:44:55',placeholderMulti:'напр.:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'Один MAC на строку или через запятую/пробел',btnSend:'Найти MAC',panelResults:'Результаты',colMAC:'MAC-адрес',colValid:'Действителен',colType:'Тип',colRegistered:'Зарегистрирован',colOrg:'Организация',colCountry:'Страна',colAssignment:'Тип блока',colVirtual:'Виртуальный',labelRegistered:'ЗАРЕГИСТРИРОВАН',labelUnregistered:'НЕ ЗАР.',labelValid:'ДЕЙСТВИТЕЛЕН',labelInvalid:'НЕДЕЙСТВИТЕЛЕН',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Тип адм.',labelUAA:'UAA (глобальный)',labelLAA:'LAA (локальный)',notRegMsg:'Не зарегистрирован в базе IEEE OUI.',invalidMsg:'Неверный формат MAC-адреса.',errBadge:'ОШИБКА',warnNoMac:'⚠ Введите MAC-адрес',loadingLabel:'Поиск MAC-адресов…',replyCount:n=>`${n} результат(ов)`,resultsReady:n=>`Поиск завершён, ${n} результат(ов).`,btnCopy:'Копировать CSV',btnCopied:'✓ Скопировано',statRegistered:'Зарегистрированы',statUnregistered:'Не зар.',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Недействительны',dir:'ltr',skipLink:'К основному содержимому'},
+ur:{subtitle:'OUI / MAC ایڈریس انٹیلیجنس',themeLight:'روشن',themeDark:'تاریک',panelParams:'کوئری پیرامیٹرز',labelMacMode:'MAC ایڈریس',tabSingle:'واحد',tabMulti:'متعدد',placeholderSingle:'مثلاً: 00:11:22:33:44:55',placeholderMulti:'مثلاً:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'ہر لائن پر ایک MAC یا کاما/اسپیس سے الگ کریں',btnSend:'MAC تلاش کریں',panelResults:'نتائج',colMAC:'MAC ایڈریس',colValid:'درست',colType:'قسم',colRegistered:'رجسٹرڈ',colOrg:'تنظیم',colCountry:'ملک',colAssignment:'تفویض',colVirtual:'ورچوئل',labelRegistered:'رجسٹرڈ',labelUnregistered:'غیر رجسٹرڈ',labelValid:'درست',labelInvalid:'غلط',labelUnicast:'یونیکاسٹ',labelMulticast:'ملٹی کاسٹ',colAdminType:'ایڈمن قسم',labelUAA:'UAA (عالمی)',labelLAA:'LAA (مقامی)',notRegMsg:'IEEE OUI میں رجسٹرڈ نہیں۔',invalidMsg:'غلط MAC ایڈریس فارمیٹ۔',errBadge:'خطا',warnNoMac:'⚠ MAC ایڈریس درج کریں',loadingLabel:'MAC ایڈریس تلاش ہو رہے ہیں…',replyCount:n=>`${n} نتائج`,resultsReady:n=>`تلاش مکمل، ${n} نتائج۔`,btnCopy:'CSV کاپی',btnCopied:'✓ کاپی ہوگئی',statRegistered:'رجسٹرڈ',statUnregistered:'غیر رجسٹرڈ',statUnicast:'یونیکاسٹ',statMulticast:'ملٹی کاسٹ',statInvalid:'غلط',dir:'rtl',skipLink:'مرکزی مواد پر جائیں'},
+vi:{subtitle:'Thông tin OUI / Địa chỉ MAC',themeLight:'Sáng',themeDark:'Tối',panelParams:'Tham số truy vấn',labelMacMode:'Địa chỉ MAC',tabSingle:'Đơn lẻ',tabMulti:'Nhiều địa chỉ',placeholderSingle:'vd: 00:11:22:33:44:55',placeholderMulti:'vd:\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'Một MAC mỗi dòng hoặc phân tách bằng dấu phẩy/khoảng trắng',btnSend:'Tra cứu MAC',panelResults:'Kết quả',colMAC:'Địa chỉ MAC',colValid:'Hợp lệ',colType:'Loại',colRegistered:'Đã đăng ký',colOrg:'Tổ chức',colCountry:'Quốc gia',colAssignment:'Phân loại',colVirtual:'Ảo',labelRegistered:'ĐÃ ĐĂNG KÝ',labelUnregistered:'CHƯA ĐK',labelValid:'HỢP LỆ',labelInvalid:'KHÔNG HỢP LỆ',labelUnicast:'Unicast',labelMulticast:'Multicast',colAdminType:'Loại Admin',labelUAA:'UAA (Toàn cầu)',labelLAA:'LAA (Cục bộ)',notRegMsg:'Không đăng ký trong cơ sở dữ liệu IEEE OUI.',invalidMsg:'Định dạng địa chỉ MAC không hợp lệ.',errBadge:'LỖI',warnNoMac:'⚠ Nhập địa chỉ MAC',loadingLabel:'Đang tra cứu địa chỉ MAC…',replyCount:n=>`${n} kết quả`,resultsReady:n=>`Tra cứu hoàn tất, ${n} kết quả.`,btnCopy:'Sao chép CSV',btnCopied:'✓ Đã sao chép',statRegistered:'Đã đăng ký',statUnregistered:'Chưa đăng ký',statUnicast:'Unicast',statMulticast:'Multicast',statInvalid:'Không hợp lệ',dir:'ltr',skipLink:'Chuyển đến nội dung chính'},
+'zh-CN':{subtitle:'OUI / MAC 地址情报',themeLight:'浅色',themeDark:'深色',panelParams:'查询参数',labelMacMode:'MAC 地址',tabSingle:'单个',tabMulti:'多个',placeholderSingle:'例：00:11:22:33:44:55',placeholderMulti:'例：\n00:11:22:33:44:55\nAA-BB-CC-DD-EE-FF\n0011.2233.4455\n...',hintSingle:'xx:xx:xx:xx:xx:xx · xx-xx-xx-xx-xx-xx · xx.xx.xx.xx.xx.xx · xxxx.xxxx.xxxx · xxxxxxxxxxxx',hintMulti:'每行一个 MAC，或用逗号/空格分隔 · 所有格式均支持',btnSend:'查询 MAC',panelResults:'结果',colMAC:'MAC 地址',colValid:'有效',colType:'类型',colRegistered:'已注册',colOrg:'组织',colCountry:'国家',colAssignment:'分配类型',colVirtual:'虚拟化',labelRegistered:'已注册',labelUnregistered:'未注册',labelValid:'有效',labelInvalid:'无效',labelUnicast:'单播',labelMulticast:'多播',colAdminType:'管理类型',labelUAA:'UAA（全局）',labelLAA:'LAA（本地）',notRegMsg:'未在 IEEE OUI 数据库中注册。',invalidMsg:'无效的 MAC 地址格式。',errBadge:'错误',warnNoMac:'⚠ 请输入 MAC 地址',loadingLabel:'正在查询 MAC 地址…',replyCount:n=>`${n} 条结果`,resultsReady:n=>`查询完成，${n} 条结果。`,btnCopy:'复制 CSV',btnCopied:'✓ 已复制',statRegistered:'已注册',statUnregistered:'未注册',statUnicast:'单播',statMulticast:'多播',statInvalid:'无效',dir:'ltr',skipLink:'跳转到主要内容'}
+};
+
+const SUPPORTED=Object.keys(LANGS);
+function detectLang(){
+  for(const l of(navigator.languages||[navigator.language||'en'])){
+    if(SUPPORTED.includes(l))return l;
+    const b=l.split('-')[0];
+    const m=SUPPORTED.find(s=>s===b||s.startsWith(b+'-'));
+    if(m)return m;
+  }
+  return'en';
+}
+
+// ── THEME ──────────────────────────────────────────────────────────
+const html=document.documentElement;
+const themeBtn=document.getElementById('theme-toggle');
+const themeLbl=document.getElementById('theme-label');
+const themeIcon=document.getElementById('theme-icon');
+let currentLang='en',isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+applyTheme(isDark);
+themeBtn.addEventListener('click',()=>{isDark=!isDark;applyTheme(isDark)});
+function applyTheme(dark){
+  html.dataset.theme=dark?'dark':'light';
+  themeBtn.setAttribute('aria-checked',dark?'false':'true');
+  const t=LANGS[currentLang]||LANGS.en;
+  themeLbl.textContent=dark?t.themeLight:t.themeDark;
+  themeIcon.textContent=dark?'☀️':'🌙';
+}
+
+// ── LANGUAGE ───────────────────────────────────────────────────────
+function applyLang(lang){
+  currentLang=lang;
+  const t=LANGS[lang]||LANGS.en;
+  const dir=t.dir||'ltr';
+  html.lang=lang;html.dir=dir;document.body.dir=dir;
+  document.getElementById('skip-link').textContent=t.skipLink||'Skip to main content';
+  document.getElementById('hdr-subtitle').textContent=t.subtitle;
+  document.getElementById('ph-params').textContent=t.panelParams;
+  document.getElementById('lbl-mac-mode').textContent=t.labelMacMode;
+  document.getElementById('tab-single').textContent=t.tabSingle;
+  document.getElementById('tab-multi').textContent=t.tabMulti;
+  document.getElementById('mac-single').placeholder=t.placeholderSingle;
+  document.getElementById('mac-multi').placeholder=t.placeholderMulti;
+  document.getElementById('mac-single-hint').textContent=t.hintSingle;
+  document.getElementById('mac-multi-hint').textContent=t.hintMulti;
+  document.getElementById('btn-send-label').textContent=t.btnSend;
+  document.getElementById('ph-results').textContent=t.panelResults;
+  document.getElementById('lang-sel-lbl').textContent=dir==='rtl'?'اللغة':'Language';
+  applyTheme(isDark);
+}
+
+const langSel=document.getElementById('lang-sel');
+const initLang=detectLang();
+langSel.value=SUPPORTED.includes(initLang)?initLang:'en';
+applyLang(langSel.value);
+langSel.addEventListener('change',()=>applyLang(langSel.value));
+
+// ── TABS ───────────────────────────────────────────────────────────
+let activeTab='single';
+const macTabs=Array.from(document.querySelectorAll('.mac-tab'));
+macTabs.forEach(b=>{
+  b.addEventListener('click',()=>activateTab(b.dataset.tab,b));
+  b.addEventListener('keydown',e=>{
+    let i=macTabs.indexOf(e.currentTarget);
+    const dir=html.dir==='rtl'?-1:1;
+    if(e.key==='ArrowRight'){e.preventDefault();macTabs[(i+dir+macTabs.length)%macTabs.length].focus()}
+    if(e.key==='ArrowLeft'){e.preventDefault();macTabs[(i-dir+macTabs.length)%macTabs.length].focus()}
+  });
+});
+function activateTab(id,btn){
+  activeTab=id;
+  macTabs.forEach(b=>{b.setAttribute('aria-selected','false');b.tabIndex=-1});
+  document.querySelectorAll('.mac-pane').forEach(p=>{p.classList.remove('active');p.hidden=true});
+  btn.setAttribute('aria-selected','true');btn.tabIndex=0;
+  const p=document.getElementById('pane-'+id);p.classList.add('active');p.hidden=false;
+}
+function parseMACs(r){return r.split(/[\n,\s]+/).map(s=>s.trim()).filter(Boolean)}
+function getMACs(){
+  if(activeTab==='single'){const v=document.getElementById('mac-single').value.trim();return v?[v]:[]}
+  return parseMACs(document.getElementById('mac-multi').value);
+}
+
+// ── SUBMIT ─────────────────────────────────────────────────────────
+const macForm=document.getElementById('mac-form'),btn=document.getElementById('btn-query'),
+      hint=document.getElementById('query-hint'),srStatus=document.getElementById('sr-status');
+macForm.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const t=LANGS[currentLang]||LANGS.en;
+  const macs=getMACs();
+  const ai=activeTab==='single'?document.getElementById('mac-single'):document.getElementById('mac-multi');
+  if(!macs.length){ai.focus();ai.setAttribute('aria-invalid','true');hint.textContent=t.warnNoMac;hint.style.color='var(--warn)';hint.setAttribute('role','alert');return}
+  ai.setAttribute('aria-invalid','false');hint.textContent='';hint.removeAttribute('role');
+  const payload=macs.length===1?{mac:macs[0]}:{macs};
+  btn.disabled=true;btn.classList.add('loading');btn.setAttribute('aria-busy','true');srStatus.textContent=t.loadingLabel;
+  const t0=performance.now();
+  try{
+    const res=await fetch('/api/v1/mac',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const elapsed=((performance.now()-t0)/1000).toFixed(2);
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();renderResults(data,macs,elapsed);srStatus.textContent=t.resultsReady(macs.length);
+  }catch(err){renderError(err,macs,((performance.now()-t0)/1000).toFixed(2));srStatus.textContent=String(err)}
+  finally{btn.disabled=false;btn.classList.remove('loading');btn.removeAttribute('aria-busy')}
+});
+document.getElementById('mac-single').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();macForm.requestSubmit()}});
+
+// ── RENDER ─────────────────────────────────────────────────────────
+let lastAnswers=[],lastMACs=[];
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function renderResults(data,macs,elapsed){
+  const panel=document.getElementById('results-panel'),body=document.getElementById('results-body'),stats=document.getElementById('stats-bar');
+  const t=LANGS[currentLang]||LANGS.en;panel.style.display='block';
+  if((data.status||'').toUpperCase()==='ERROR'){
+    lastAnswers=[];lastMACs=[];
+    body.innerHTML=`<div class="result-meta"><span class="badge badge-error">${t.errBadge}</span><span class="result-query-str">${esc(macs.join(', '))}</span><span class="result-time">${elapsed}s</span></div><div class="raw-block" role="alert" style="color:var(--err)">${esc(JSON.stringify(data,null,2))}</div>`;
+    stats.style.display='none';finalize(panel);return;
+  }
+  const ansMap={};(data.answers||[]).forEach(a=>{if(a.mac)ansMap[a.mac.toLowerCase()]=a});
+  // Also index by original input
+  (data.answers||[]).forEach((a,i)=>{if(i<macs.length)ansMap['__input_'+i]=a});
+  lastMACs=macs;lastAnswers=data.answers||[];
+  const regCount=(data.answers||[]).filter(a=>a.registered).length;
+  const qStr=macs.length===1?macs[0]:`${macs.length} MACs`;
+  const oBadge=regCount>0?`<span class="badge badge-reg">${t.labelRegistered}</span>`:`<span class="badge badge-noreg">${t.labelUnregistered}</span>`;
+  let rows='';(data.answers||[]).forEach((a,i)=>{rows+=buildRow(a,macs[i]||a.mac,t)});
+  body.innerHTML=`<div class="result-meta">${oBadge}<span class="result-query-str">${esc(qStr)}</span><span class="result-time">${elapsed}s · ${t.replyCount(macs.length)}</span><button class="btn-copy" id="btn-csv" type="button"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span id="csv-label">${esc(t.btnCopy)}</span></button></div><div class="mac-table-wrap"><table class="mac-table" aria-label="${esc(t.panelResults)}"><caption class="visually-hidden">${esc(t.panelResults)}</caption><thead><tr><th>${esc(t.colMAC)}</th><th>${esc(t.colValid)}</th><th>${esc(t.colType)}</th><th>${esc(t.colAdminType)}</th><th>${esc(t.colRegistered)}</th><th>${esc(t.colOrg)}</th><th>${esc(t.colCountry)}</th><th>${esc(t.colAssignment)}</th><th>${esc(t.colVirtual)}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  document.getElementById('btn-csv').addEventListener('click',copyCSV);
+  const c={registered:0,unicast:0,multicast:0,invalid:0,noreg:0};
+  (data.answers||[]).forEach(a=>{
+    if(!a.valid){c.invalid++;return}
+    if(a.type==='Unicast')c.unicast++;else if(a.type==='Multicast')c.multicast++;
+    if(a.registered)c.registered++;else c.noreg++;
+  });
+  const sp=[];
+  if(c.registered)sp.push(`<span class="stat-item"><span class="stat-dot registered"></span>${c.registered} ${esc(t.statRegistered)}</span>`);
+  if(c.noreg)sp.push(`<span class="stat-item"><span class="stat-dot noreg"></span>${c.noreg} ${esc(t.statUnregistered)}</span>`);
+  if(c.unicast)sp.push(`<span class="stat-item"><span class="stat-dot unicast"></span>${c.unicast} ${esc(t.statUnicast)}</span>`);
+  if(c.multicast)sp.push(`<span class="stat-item"><span class="stat-dot multicast"></span>${c.multicast} ${esc(t.statMulticast)}</span>`);
+  if(c.invalid)sp.push(`<span class="stat-item"><span class="stat-dot invalid"></span>${c.invalid} ${esc(t.statInvalid)}</span>`);
+  stats.innerHTML=sp.join('');stats.style.display=sp.length?'flex':'none';finalize(panel);
+}
+
+function assignPill(assignment){
+  if(!assignment)return'—';
+  const k=assignment.replace(/[^A-Za-z0-9-]/g,'');
+  return`<span class="assign-pill assign-${esc(k)}">${esc(assignment)}</span>`;
+}
+
+function virtualChip(v){
+  if(!v||v==='')return'—';
+  const isVirt=v.toLowerCase()!=='false';
+  return`<span class="virtual-chip${isVirt?' is-virtual':''}">${esc(isVirt?v:'—')}</span>`;
+}
+
+function buildRow(a,inputMAC,t){
+  if(!a.valid){
+    return`<tr><td class="td-mac invalid">${esc(inputMAC)}</td><td><span class="badge badge-invalid">${t.labelInvalid}</span></td><td>—</td><td>—</td><td>—</td><td colspan="4" class="td-invalid-msg">⊘ &nbsp;${esc(t.invalidMsg)}</td></tr>`;
+  }
+  const macDisplay=a.mac||esc(inputMAC);
+  const macClass=a.registered?'td-mac':'td-mac noreg';
+  const validBadge=`<span class="badge badge-valid">${t.labelValid}</span>`;
+  const typeBadge=a.type==='Multicast'?`<span class="badge badge-multi">${t.labelMulticast}</span>`:`<span class="badge badge-uni">${t.labelUnicast}</span>`;
+  const adminBadge=a.admin_type==='LAA'?`<span class="badge badge-laa">${t.labelLAA}</span>`:`<span class="badge badge-uaa">${t.labelUAA}</span>`;
+  const regBadge=a.registered?`<span class="badge badge-reg">${t.labelRegistered}</span>`:`<span class="badge badge-noreg">${t.labelUnregistered}</span>`;
+  if(!a.organisation_name){
+    return`<tr><td class="${macClass}">${esc(macDisplay)}</td><td>${validBadge}</td><td>${typeBadge}</td><td>${adminBadge}</td><td>${regBadge}</td><td colspan="4" class="td-noreg-msg">⊘ &nbsp;${esc(t.notRegMsg)}</td></tr>`;
+  }
+  const org=`<span class="cell-main accent">${esc(a.organisation_name||'—')}</span>${a.organization_address?`<span class="cell-sub">${esc(a.organization_address)}</span>`:''}`;
+  const country=a.country_code?`<span class="cell-main muted">${esc(a.country_code.toUpperCase())}</span>`:'—';
+  const detailLine=`<div class="detail-line">`+
+    (a.oui?`<span class="detail-seg"><span class="detail-lbl">OUI</span><span class="detail-val">${esc(a.oui)}</span></span>`:'—')+
+    (a.address_min&&a.address_max?`<span class="detail-seg"><span class="detail-lbl">Range</span><span class="detail-val">${esc(a.address_min)}</span><span class="detail-lbl"> → </span><span class="detail-val">${esc(a.address_max)}</span></span>`:'')+
+    (a.block_size!=null?`<span class="detail-seg"><span class="detail-lbl">Block</span><span class="detail-val">${a.block_size.toLocaleString()}</span></span>`:'')+
+  `</div>`;
+  return`<tr><td class="${macClass}">${esc(macDisplay)}</td><td>${validBadge}</td><td>${typeBadge}</td><td>${adminBadge}</td><td>${regBadge}</td><td>${org}</td><td>${country}</td><td>${assignPill(a.assignment)}</td><td>${virtualChip(a.virtual)}</td></tr>`+
+    `<tr class="row-detail"><td colspan="9">${detailLine}</td></tr>`;
+}
+
+function renderError(err,macs,elapsed){
+  const panel=document.getElementById('results-panel'),body=document.getElementById('results-body');
+  const t=LANGS[currentLang]||LANGS.en;panel.style.display='block';
+  body.innerHTML=`<div class="result-meta"><span class="badge badge-error">${t.errBadge}</span><span class="result-query-str">${esc(macs.join(', '))}</span><span class="result-time">${elapsed}s</span></div><div class="raw-block" role="alert" style="color:var(--err)">${esc(String(err))}</div>`;
+  document.getElementById('stats-bar').style.display='none';finalize(panel);
+}
+
+// ── CSV EXPORT ─────────────────────────────────────────────────────
+function copyCSV(){
+  const t=LANGS[currentLang]||LANGS.en;
+  const hdr='mac|valid|type|admin_type|registered|oui|organisation_name|organization_address|country_code|assignment|virtual|block_size|address_min|address_max';
+  const rows=lastAnswers.map(a=>{
+    if(!a.valid)return[a.mac,'false','','','false','','','','','','','','',''].join('|');
+    return[a.mac,a.valid,a.type,a.admin_type||'',a.registered,a.oui||'',a.organisation_name||'',a.organization_address||'',a.country_code||'',a.assignment||'',a.virtual||'',a.block_size!=null?a.block_size:'',a.address_min||'',a.address_max||''].join('|');
+  });
+  const csv=[hdr,...rows].join('\r\n');
+  navigator.clipboard.writeText(csv).then(()=>{
+    const b=document.getElementById('btn-csv');const l=document.getElementById('csv-label');if(!b)return;
+    b.classList.add('copied');l.textContent=t.btnCopied;
+    setTimeout(()=>{b.classList.remove('copied');l.textContent=t.btnCopy},2000);
+  }).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=csv;ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy')}catch(_){}document.body.removeChild(ta);
+  });
+}
+function finalize(panel){panel.scrollIntoView({behavior:'smooth',block:'nearest'});panel.setAttribute('tabindex','-1');panel.focus({preventScroll:true})}
+</script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "http2mac — MAC Address / OUI Lookup API",
+    "description": "Resolves one or more MAC addresses against the IEEE OUI database.\nThe internal database is built automatically from the letstool CDN () and refreshed every 4 hours.\n\nEach MAC address is validated, classified as Unicast or Multicast, identified as UAA (Universally Administered) or LAA (Locally Administered), and enriched with the registered organisation name, address, country code, assignment type (MA-L, MA-M, MA-S, CID, IAB), block range, and virtualisation hint.",
+    "version": "1.0.0",
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local server"
+    }
+  ],
+  "paths": {
+    "/api/v1/mac": {
+      "post": {
+        "summary": "Look up one or more MAC addresses against the OUI database",
+        "description": "Accepts a **single MAC** (`mac`) or a **batch** (`macs`). Returns validation status, unicast/multicast classification, IEEE registration status, and full OUI metadata for each queried MAC.\n\nExactly one of `mac` or `macs` must be provided per request.\nMaximum batch size is controlled by `MAC_MAX_MACS` / `-max-macs` (default 100).\n\n**Accepted MAC formats:**\n- `xx:xx:xx:xx:xx:xx` (Linux colon-separated)\n- `xx-xx-xx-xx-xx-xx` (Windows hyphen-separated)\n- `xx.xx.xx.xx.xx.xx` (dot-separated per-byte)\n- `xxxx.xxxx.xxxx` (Cisco three-group)\n- `xxxxxxxxxxxx` (no separator, 12 hex digits)\n\nAll formats are normalised to lowercase `xx:xx:xx:xx:xx:xx` in the response.",
+        "operationId": "lookupMAC",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MACRequest"
+              },
+              "examples": {
+                "single_colon": {
+                  "summary": "Single MAC (colon-separated)",
+                  "value": {
+                    "mac": "00:11:22:33:44:55"
+                  }
+                },
+                "single_cisco": {
+                  "summary": "Single MAC (Cisco format)",
+                  "value": {
+                    "mac": "0011.2233.4455"
+                  }
+                },
+                "batch": {
+                  "summary": "Batch MAC lookup",
+                  "value": {
+                    "macs": [
+                      "00:11:22:33:44:55",
+                      "AA-BB-CC-DD-EE-FF",
+                      "0011.2233.4455",
+                      "001122334455"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "MAC lookup result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MACResponse"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed — only POST is accepted"
+          }
+        }
+      }
+    },
+    "/db/mac": {
+      "get": {
+        "summary": "Download the current mac.mmdb database file",
+        "description": "Serves the current `mac.mmdb` binary for peer instances that want to synchronise without fetching from the CDN.",
+        "operationId": "getDB",
+        "responses": {
+          "200": {
+            "description": "mac.mmdb binary file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Database not yet built"
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "OpenAPI 3.1 specification (this document)",
+        "operationId": "getOpenAPI",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON document",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Embedded interactive web UI",
+        "description": "Browser-based interface for single and batch MAC address OUI lookup. Supports dark/light themes and 15 languages.",
+        "operationId": "getUI",
+        "responses": {
+          "200": {
+            "description": "HTML web UI",
+            "content": {
+              "text/html": {}
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MACRequest": {
+        "type": "object",
+        "description": "Exactly one of `mac` or `macs` must be provided.",
+        "properties": {
+          "mac": {
+            "type": "string",
+            "description": "Single MAC address to look up. Accepted formats: `xx:xx:xx:xx:xx:xx`, `xx-xx-xx-xx-xx-xx`, `xx.xx.xx.xx.xx.xx`, `xxxx.xxxx.xxxx`, `xxxxxxxxxxxx`.",
+            "example": "00:11:22:33:44:55"
+          },
+          "macs": {
+            "type": "array",
+            "description": "Batch of MAC addresses to look up. Maximum count is controlled by `MAC_MAX_MACS` / `-max-macs` (default 100).",
+            "items": {
+              "type": "string",
+              "example": "00:11:22:33:44:55"
+            }
+          }
+        }
+      },
+      "MACResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUCCESS",
+              "NOTFOUND",
+              "ERROR"
+            ],
+            "description": "- `SUCCESS`: at least one MAC was found in the OUI database; `answers` is fully populated.\n- `NOTFOUND`: no MACs matched any OUI block; `answers` still contains validation and type data.\n- `ERROR`: malformed request (neither `mac` nor `macs`, or both), batch too large, or database not yet initialised."
+          },
+          "answers": {
+            "type": "array",
+            "description": "One entry per queried MAC address. Always present for valid requests; each entry contains at minimum `mac`, `valid`, `type`, and `registered`.",
+            "items": {
+              "$ref": "#/components/schemas/MACAnswer"
+            }
+          }
+        }
+      },
+      "MACAnswer": {
+        "type": "object",
+        "required": [
+          "mac",
+          "valid",
+          "type",
+          "registered"
+        ],
+        "properties": {
+          "mac": {
+            "type": "string",
+            "description": "The normalised MAC address in lowercase colon-separated format (`xx:xx:xx:xx:xx:xx`). For invalid inputs, the original input string is echoed back."
+          },
+          "valid": {
+            "type": "boolean",
+            "description": "`true` if the MAC address passed format validation (exactly 6 bytes, valid hex characters, supported separator pattern)."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "Unicast",
+              "Multicast",
+              "Unknown"
+            ],
+            "description": "Address type based on the LSB of the first octet: `Unicast` (bit=0), `Multicast` (bit=1, includes broadcast). `Unknown` is returned for invalid MACs."
+          },
+          "admin_type": {
+            "type": "string",
+            "enum": [
+              "UAA",
+              "LAA"
+            ],
+            "description": "Administration type based on the U/L bit (bit 1 of the first octet): UAA (Universally Administered Address — globally unique, factory-assigned by the manufacturer) or LAA (Locally Administered Address — manually/locally assigned, often random or virtual). Only present when valid is true."
+          },
+          "registered": {
+            "type": "boolean",
+            "description": "`true` if the MAC address was found in the IEEE OUI database with an assignment type of MA-L, MA-M, MA-S, CID, or IAB."
+          },
+          "oui": {
+            "type": "string",
+            "description": "The OUI prefix as stored in the IEEE database (e.g. `00:11:22`)."
+          },
+          "organisation_name": {
+            "type": "string",
+            "description": "The organisation name registered for this OUI block."
+          },
+          "organization_address": {
+            "type": "string",
+            "description": "The postal address of the registered organisation."
+          },
+          "country_code": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2 country code (uppercase)."
+          },
+          "address_min": {
+            "type": "string",
+            "description": "The lowest MAC address in the registered block (e.g. `00:11:22:00:00:00`)."
+          },
+          "address_max": {
+            "type": "string",
+            "description": "The highest MAC address in the registered block (e.g. `00:11:22:ff:ff:ff`)."
+          },
+          "block_size": {
+            "type": "integer",
+            "description": "Number of MAC addresses in the registered block. MA-L = 16,777,216; MA-M = 1,048,576; MA-S = 4,096."
+          },
+          "assignment": {
+            "type": "string",
+            "enum": [
+              "MA-L",
+              "MA-M",
+              "MA-S",
+              "CID",
+              "IAB"
+            ],
+            "description": "IEEE assignment type: MA-L (24-bit OUI), MA-M (28-bit), MA-S (36-bit), CID (Company ID), IAB (Individual Address Block)."
+          },
+          "virtual": {
+            "type": "string",
+            "description": "Virtualisation hint from the database. `\"False\"` means the block is not known to be used by a virtualisation platform. Any other value names the virtualisation technology (e.g. `\"VMware\"`, `\"VirtualBox\"`)."
+          }
+        }
+      }
+    }
+  }
+}
