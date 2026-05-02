@@ -41,7 +41,7 @@ LABEL org.opencontainers.image.title="http2mac" \
       org.opencontainers.image.description="HTTP Server → mac (Go)" \
       org.opencontainers.image.source="https://github.com/letstool/http2mac" \
       org.opencontainers.image.authors="LetsTool.net" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="Apache-2.0"
 
 USER 65534:65534
 
